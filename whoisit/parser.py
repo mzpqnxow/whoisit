@@ -61,20 +61,25 @@ class Parser:
         card_field, card_data = vcard
         if card_field != 'vcard':
             return False
-        name, email = '', ''
+        name, email, address = '', '', ''
         for field in card_data:
             if len(field) != 4:
                 continue
             entry_field, entry_data, entry_type, entry_label = field
             if entry_type != 'text':
                 continue
+            elif entry_field == 'adr':
+                # address = self.custom_fn(entry_field, entry_data, entry_type, entry_label)
+                address = clean(address)
+                assert entry_data.keys() == {'label'}
+                return entry_data['label']
             elif entry_field == 'fn':
                 name = clean(entry_label)
             elif entry_field == 'org':
                 name = clean(entry_label)
             elif entry_field == 'email':
                 email = clean(entry_label)
-        return (name, email) if name or email else False
+        return (name, email, address) if any((name, email, address)) else False
 
     def extract_handle(self):
         self.parsed['handle'] = clean(self.raw_data.get('handle', '')).upper()
@@ -185,10 +190,10 @@ class Parser:
             entity_type = clean(entity.get('objectClassName', ''))
             whois_server = clean(entity.get('port43', ''))
             # Most common use cases care about the name and email address
-            name, email = '', ''
+            name, email, address = '', '', ''
             vcard = self.parse_vcard_array(entity.get('vcardArray', []))
             if vcard:
-                name, email = vcard
+                name, email, address = vcard
             for role in entity.get('roles', []):
                 parsed_entity = {}
                 if handle:
@@ -201,6 +206,8 @@ class Parser:
                     parsed_entity['whois_server'] = whois_server
                 if name:
                     parsed_entity['name'] = name
+                if address:
+                    parsed_entity['address'] = address.split('\n')
                 if email:
                     parsed_entity['email'] = email
                 if rir:
@@ -356,16 +363,18 @@ class ParseEntity(Parser):
     def extract_root_vcard(self):
         self.parsed['name'] = ''
         self.parsed['email'] = ''
+        self.parsed['address'] = None
         root_vcard = self.raw_data.get('vcardArray', [])
         if root_vcard:
             parsed = self.parse_vcard_array(root_vcard)
             if parsed:
-                name, email = parsed
+                name, email, address = parsed
                 if name:
                     self.parsed['name'] = name
                 if email:
                     self.parsed['email'] = email
-
+                if address:
+                    self.parsed['address'] = address.split('\n')
 
 # These map the objectClassName values returned in RDAP responses
 parser_map = {
